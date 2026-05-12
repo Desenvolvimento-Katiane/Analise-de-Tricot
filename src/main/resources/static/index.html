@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Análise Tricot — Retorno após Prova</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a3a5c;
+      color: white;
+      padding: 18px 36px;
+    }
+    header h1 { font-size: 1.35em; font-weight: 600; }
+    header p  { font-size: 0.82em; opacity: 0.75; margin-top: 4px; }
+
+    main { max-width: 1200px; margin: 28px auto; padding: 0 20px; }
+
+    /* ─── Drop zone ──────────────────────────────────────── */
+    #dropZone {
+      background: white;
+      border: 2px dashed #4a80b5;
+      border-radius: 12px;
+      padding: 50px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      margin-bottom: 24px;
+    }
+    #dropZone:hover, #dropZone.drag-over {
+      background: #e8f2ff;
+      border-color: #1a3a5c;
+    }
+    #dropZone p       { color: #444; margin-top: 12px; }
+    #dropZone span    { font-size: 0.82em; color: #888; }
+    #dropZone svg     { display: block; margin: 0 auto; }
+    #fileInput        { display: none; }
+
+    /* ─── Progress ───────────────────────────────────────── */
+    #progress {
+      display: none;
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #1a3a5c;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Error ──────────────────────────────────────────── */
+    #errorBox {
+      display: none;
+      background: #fff5f5;
+      border: 1px solid #f5c6cb;
+      border-radius: 8px;
+      padding: 14px 18px;
+      color: #721c24;
+      margin-bottom: 20px;
+    }
+
+    /* ─── Metrics ────────────────────────────────────────── */
+    .metrics { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .metric {
+      background: white;
+      border-radius: 10px;
+      padding: 18px 22px;
+      flex: 1;
+      min-width: 170px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border-top: 4px solid;
+    }
+    .metric.blue   { border-top-color: #1a3a5c; }
+    .metric.orange { border-top-color: #e67e22; }
+    .metric.green  { border-top-color: #27ae60; }
+    .metric.purple { border-top-color: #8e44ad; }
+    .metric.teal   { border-top-color: #0097a7; }
+    .metric .val   { font-size: 2.4em; font-weight: 700; line-height: 1; }
+    .metric.blue   .val { color: #1a3a5c; }
+    .metric.orange .val { color: #e67e22; }
+    .metric.green  .val { color: #27ae60; }
+    .metric.purple .val { color: #8e44ad; }
+    .metric.teal   .val { color: #0097a7; }
+    .metric .lbl   { font-size: 0.82em; color: #666; margin-top: 5px; }
+    .metric.clickable { cursor: pointer; transition: box-shadow 0.15s; }
+    .metric.clickable:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+    #modalOverlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    #modalOverlay.open { display: flex; }
+    #modalBox {
+      background: white; border-radius: 14px;
+      padding: 24px; max-width: 90vw; max-height: 85vh;
+      overflow-y: auto; position: relative;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+    #modalClose {
+      position: absolute; top: 12px; right: 16px;
+      background: none; border: none; font-size: 1.6em;
+      cursor: pointer; color: #666; line-height: 1;
+    }
+    #modalTitle {
+      font-size: 1em; font-weight: 700; color: #1a3a5c;
+      margin-bottom: 18px; padding-right: 32px;
+    }
+    #refList { display: flex; flex-direction: column; gap: 6px; min-width: 380px; }
+    .ref-header {
+      display: grid; grid-template-columns: 1fr 1fr 90px;
+      padding: 4px 14px; font-size: 0.75em; font-weight: 700;
+      color: #888; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .ref-row {
+      display: grid; grid-template-columns: 1fr 1fr 90px;
+      align-items: center; padding: 10px 14px;
+      background: #f8f9fa; border-radius: 8px;
+    }
+    .ref-row .ref-code { font-weight: 600; color: #1a3a5c; font-size: 0.95em; }
+    .ref-row .prova-badge {
+      background: #fff3e0; color: #e67e22;
+      padding: 3px 10px; border-radius: 12px;
+      font-size: 0.85em; font-weight: 700;
+      justify-self: start;
+    }
+    .ref-row .qty-badge {
+      background: #e8f0fe; color: #1a73e8;
+      padding: 3px 10px; border-radius: 12px;
+      font-size: 0.85em; font-weight: 700;
+      justify-self: center; text-align: center;
+    }
+
+    /* ─── Section card ───────────────────────────────────── */
+    .section {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+      overflow-x: auto;
+      margin-bottom: 20px;
+    }
+    .sec-header {
+      padding: 13px 18px;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sec-header h3 { font-size: 0.95em; color: #1a3a5c; }
+
+    /* ─── Tables ─────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: #f5f7fa;
+      padding: 9px 14px;
+      text-align: left;
+      font-size: 0.78em;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #555;
+      border-bottom: 2px solid #e0e4ea;
+    }
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #f5f5f5;
+      font-size: 0.86em;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fbff; }
+
+    .ref-code { font-weight: 700; font-family: 'Consolas', monospace; }
+    .badge-prova  { display:inline-block; background:#fff3e0; color:#e67e22; padding:2px 7px; border-radius:4px; font-size:0.8em; }
+    .badge-tricot { display:inline-block; background:#e8f5e9; color:#27ae60; padding:2px 7px; border-radius:4px; font-size:0.8em; margin:1px 2px 1px 0; }
+
+    /* sequence in detail table */
+    .seq { font-size:0.78em; color:#666; line-height:1.7; max-width:380px; }
+    .seq .s-prova         { color:#e67e22; font-weight:bold; }
+    .seq .s-tricot-after  { color:#27ae60; font-weight:bold; }
+
+    /* ─── Button ─────────────────────────────────────────── */
+    .btn {
+      background: #1a3a5c; color: white; border: none;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.82em;
+    }
+    .btn:hover { background: #2a5a8c; }
+
+    #results { display: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Analise Tricot</h1>
+  <p id="collectionName"></p>
+</header>
+
+<main>
+
+  <!-- Drop zone -->
+  <div id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <svg width="46" height="46" viewBox="0 0 24 24" fill="none"
+         stroke="#4a80b5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+      <polyline points="14,2 14,8 20,8"/>
+      <line x1="12" y1="18" x2="12" y2="12"/>
+      <polyline points="9,15 12,12 15,15"/>
+    </svg>
+    <p><strong>Arraste o PDF aqui</strong> ou clique para selecionar</p>
+    <span style="color:#c0392b; font-weight:600;">Baixe a gerencial Claude Tricot do fluxogama no formato Lista (PDF).</span>
+    <input type="file" id="fileInput" accept=".pdf">
+  </div>
+
+  <!-- Progress -->
+  <div id="progress">
+    <div class="spinner"></div>
+    <p id="progText">Processando…</p>
+  </div>
+
+  <!-- Error -->
+  <div id="errorBox"></div>
+
+  <!-- Results -->
+  <div id="results">
+
+    <div class="metrics" id="metrics"></div>
+
+    <!-- Collection progress report -->
+    <div class="section" id="sectionAndamento">
+      <div class="sec-header">
+        <h3>Relatório de Andamento da Coleção</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Sub-etapa Atual</th>
+            <th style="text-align:center">Referências</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyAndamento"></tbody>
+      </table>
+    </div>
+
+    <!-- All references summary -->
+    <div class="section" style="display:none">
+      <div class="sec-header">
+        <h3>Todas as referências do Mix</h3>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Referência</th>
+            <th>Passou por Prova?</th>
+            <th>Voltou ao Tricot após Prova?</th>
+            <th>Qtd. sub-etapas</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyAll"></tbody>
+      </table>
+    </div>
+
+  </div><!-- /results -->
+
+</main>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  PDF.js setup
+// ─────────────────────────────────────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Column boundaries  (PDF user-space; A3 landscape = 1190 × 842 pts)
+//  Confirmed by extracting actual x,y values from Tricot.pdf:
+//    Modelo header at x=261.3, ref codes at x≈263-264
+//    Sub-Etapa header at x=387.9, sub-stage texts at x≈386-430
+//    Data header at x=539.7, date texts at x=555.4
+// ─────────────────────────────────────────────────────────────────────────────
+const COL_MODELO   = [196, 390];
+const COL_SUBETAPA = [380, 540];
+const COL_DATA     = [540, 713];
+
+// Items with y > this are page/column headers — skip them
+// Column headers are at y≈797; first data rows start at y≈783
+const HEADER_Y_MAX = 790;
+
+// The reference-code item in the Modelo column appears ~3.3 pts BELOW
+// the first sub-stage row.  We add this tolerance so a sub-stage that is
+// slightly ABOVE its reference code is still correctly assigned to it.
+const REF_TOLERANCE = 6;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Patterns
+// ─────────────────────────────────────────────────────────────────────────────
+// Reference code examples: C3079, FB467, N6178 TRICOT, R6448 V1, PROJ203
+const REF_RE   = /^[A-Z]{1,4}\d{3,5}(\s+V\d+)?(\s+TRICOT)?$/;
+
+// Dates in the report: DD/MM/YYYY HH:MM:SS
+const DATE_RE  = /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/;
+
+// "Prova de Peça" — text that starts with "Prova"
+// Excludes "Alteração Prova" (which starts with "Alteração")
+const PROVA_RE  = /^prova\b/i;
+
+// Any stage that contains "Tricot"
+const TRICOT_RE = /tricot/i;
+
+// "Entrada Engenharia" sub-stage
+const ENGENHARIA_RE = /entrada\s+engenharia/i;
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────────────────────────────────────
+let gRefs      = [];  // all parsed references
+let gProvaRefs = [];  // analysis results
+let gCollection = ''; // collection name from PDF
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Main entry point
+// ─────────────────────────────────────────────────────────────────────────────
+async function processPDF(file) {
+  showProgress('Lendo PDF…');
+  hideResults();
+  hideError();
+
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+
+    // Collect text items from all pages
+    const items = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      showProgress(`Processando página ${p} de ${pdf.numPages}…`);
+      const page = await pdf.getPage(p);
+      const tc   = await page.getTextContent();
+      for (const item of tc.items) {
+        const txt = (item.str || '').trim();
+        if (!txt) continue;
+        const [,,,,tx, ty] = item.transform;
+        items.push({ text: txt, x: tx, y: ty, page: p });
+      }
+    }
+
+    showProgress('Analisando dados…');
+    gRefs      = buildReferences(items);
+    gProvaRefs = analyzeReturnToTricot(gRefs);
+
+    // Extract collection name from leftmost column (x < COL_MODELO[0])
+    const colCounts = {};
+    for (const it of items) {
+      if (it.x < COL_MODELO[0] && it.y <= HEADER_Y_MAX && it.text.length > 2) {
+        colCounts[it.text] = (colCounts[it.text] || 0) + 1;
+      }
+    }
+    const colTop = Object.entries(colCounts).sort((a, b) => b[1] - a[1]);
+    gCollection = colTop.length > 0 ? colTop[0][0] : '';
+
+    if (gRefs.length === 0) {
+      showError(
+        'Nenhuma referência foi encontrada no PDF. ' +
+        'Verifique se o arquivo é um Relatório Gerencial no formato padrão ' +
+        '(A3 paisagem com as colunas Modelo / Histórico de Sub-Etapa / Histórico de Data de Saída).'
+      );
+      hideProgress();
+      return;
+    }
+
+    displayResults(gRefs, gProvaRefs);
+  } catch (err) {
+    console.error(err);
+    showError('Erro ao processar o PDF: ' + err.message);
+    hideProgress();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Build reference objects
+// ─────────────────────────────────────────────────────────────────────────────
+function buildReferences(items) {
+  // 1. Identify reference-code markers
+  const markers = items
+    .filter(i =>
+      i.y <= HEADER_Y_MAX &&
+      inRange(i.x, COL_MODELO) &&
+      REF_RE.test(i.text)
+    )
+    .sort((a, b) => a.page !== b.page ? a.page - b.page : b.y - a.y); // top→bottom
+
+  if (markers.length === 0) return [];
+
+  const refs = markers.map(m => ({
+    code:       m.text,
+    page:       m.page,
+    y:          m.y,
+    stageItems: [],
+    dateItems:  [],
+    stages:     [],   // [{name, dateStr, date}]
+  }));
+
+  // 2. Assign sub-stage and date items to their reference
+  const subItems  = items.filter(i =>
+    i.y <= HEADER_Y_MAX && inRange(i.x, COL_SUBETAPA)
+  );
+  const dateItems = items.filter(i =>
+    i.y <= HEADER_Y_MAX && inRange(i.x, COL_DATA) && DATE_RE.test(i.text)
+  );
+
+  for (const item of subItems) {
+    const idx = findRefIndex(item, markers);
+    if (idx !== -1) refs[idx].stageItems.push(item);
+  }
+  for (const item of dateItems) {
+    const idx = findRefIndex(item, markers);
+    if (idx !== -1) refs[idx].dateItems.push(item);
+  }
+
+  // 3. Sort items top→bottom within each reference and pair them
+  for (const ref of refs) {
+    ref.stageItems.sort((a, b) => a.page !== b.page ? a.page - b.page : b.y - a.y);
+    ref.dateItems .sort((a, b) => a.page !== b.page ? a.page - b.page : b.y - a.y);
+
+    const n = Math.max(ref.stageItems.length, ref.dateItems.length);
+    for (let i = 0; i < n; i++) {
+      const sItem = ref.stageItems[i];
+      const dItem = ref.dateItems[i];
+      ref.stages.push({
+        name:    sItem ? sItem.text : '',
+        dateStr: dItem ? dItem.text : '',
+        date:    dItem ? parseDate(dItem.text) : null,
+      });
+    }
+  }
+
+  return refs;
+}
+
+// Returns the index of the reference that "owns" a given item.
+// The reference code appears ≈3.3 pts BELOW the first sub-stage of its block,
+// so we use REF_TOLERANCE to allow sub-stages slightly above the ref code.
+function findRefIndex(item, markers) {
+  // markers sorted: page asc, y desc (top → bottom)
+  let last = -1;
+  for (let i = 0; i < markers.length; i++) {
+    const m = markers[i];
+    const before =
+      m.page < item.page ||
+      (m.page === item.page && m.y >= item.y - REF_TOLERANCE);
+
+    if (before) {
+      last = i;
+    } else {
+      if (m.page >= item.page) break;
+    }
+  }
+  return last;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Analyze: find references with Prova → Tricot return
+// ─────────────────────────────────────────────────────────────────────────────
+function analyzeReturnToTricot(refs) {
+  const result = [];
+
+  for (const ref of refs) {
+    const dated   = ref.stages.filter(s => s.date  && s.name).sort((a,b) => a.date-b.date);
+    const undated = ref.stages.filter(s => !s.date && s.name);
+    const sorted  = [...dated, ...undated];
+
+    let provaFound   = false;
+    let provaName    = '';
+    const tricotBack = [];
+
+    for (const s of sorted) {
+      if (!provaFound && PROVA_RE.test(s.name)) {
+        provaFound = true;
+        provaName  = s.name;
+      } else if (provaFound && TRICOT_RE.test(s.name)) {
+        if (!tricotBack.includes(s.name)) tricotBack.push(s.name);
+      }
+    }
+
+    const hadProva = provaFound;
+
+    if (provaFound && tricotBack.length > 0) {
+      let afterProva = false;
+      const seq = sorted
+        .filter(s => s.name)
+        .map(s => {
+          const isProva = PROVA_RE.test(s.name);
+          if (isProva) afterProva = true;
+          const isTricotAfter = afterProva && !isProva && TRICOT_RE.test(s.name);
+          return { name: s.name, isProva, isTricotAfter };
+        });
+
+      result.push({ ref, provaName, tricotBack, seq, hadProva,
+        passedEngenharia: ref.stages.some(s => ENGENHARIA_RE.test(s.name)),
+        provaCount: ref.stages.filter(s => PROVA_RE.test(s.name)).length,
+        currentStages: (() => { let li=-1; for(let i=ref.stages.length-1;i>=0;i--){if(ref.stages[i].date&&ref.stages[i].name){li=i;break;}} if(li===-1){const all=ref.stages.filter(s=>s.name).map(s=>s.name);return all.length>0?all:['(sem etapa)'];} const tr=ref.stages.slice(li+1).filter(s=>s.name).map(s=>s.name); return tr.length>0?tr:[ref.stages[li].name]; })(),
+        currentStage: (() => { let li=-1; for(let i=ref.stages.length-1;i>=0;i--){if(ref.stages[i].date&&ref.stages[i].name){li=i;break;}} if(li===-1){const all=ref.stages.filter(s=>s.name).map(s=>s.name);return all.length>0?all.join(' / '):'';}  const tr=ref.stages.slice(li+1).filter(s=>s.name).map(s=>s.name); return tr.length>0?tr.join(' / '):ref.stages[li].name; })() });
+    } else {
+      result.push({ ref, provaName, tricotBack: [], seq: [], hadProva,
+        passedEngenharia: ref.stages.some(s => ENGENHARIA_RE.test(s.name)),
+        provaCount: ref.stages.filter(s => PROVA_RE.test(s.name)).length,
+        currentStages: (() => { let li=-1; for(let i=ref.stages.length-1;i>=0;i--){if(ref.stages[i].date&&ref.stages[i].name){li=i;break;}} if(li===-1){const all=ref.stages.filter(s=>s.name).map(s=>s.name);return all.length>0?all:['(sem etapa)'];} const tr=ref.stages.slice(li+1).filter(s=>s.name).map(s=>s.name); return tr.length>0?tr:[ref.stages[li].name]; })(),
+        currentStage: (() => { let li=-1; for(let i=ref.stages.length-1;i>=0;i--){if(ref.stages[i].date&&ref.stages[i].name){li=i;break;}} if(li===-1){const all=ref.stages.filter(s=>s.name).map(s=>s.name);return all.length>0?all.join(' / '):'';}  const tr=ref.stages.slice(li+1).filter(s=>s.name).map(s=>s.name); return tr.length>0?tr.join(' / '):ref.stages[li].name; })() });
+    }
+  }
+
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Display results
+// ─────────────────────────────────────────────────────────────────────────────
+function displayResults(refs, analyzed) {
+  document.getElementById('collectionName').textContent = gCollection || '';
+
+  const total           = refs.length;
+  const withProva       = analyzed.filter(a => a.hadProva).length;
+  const withReturn      = analyzed.filter(a => a.tricotBack.length > 0).length;
+  const pct             = withProva > 0 ? Math.round(withReturn / withProva * 100) : 0;
+  const withEngenharia  = analyzed.filter(a => a.passedEngenharia).length;
+
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric blue">
+      <div class="val">${total}</div>
+      <div class="lbl">Mix</div>
+    </div>
+    <div class="metric teal">
+      <div class="val">${withEngenharia}</div>
+      <div class="lbl">Peças Liberadas</div>
+    </div>
+    <div class="metric purple">
+      <div class="val">${withProva}</div>
+      <div class="lbl">Passaram por Prova de Peça</div>
+    </div>
+    <div class="metric orange clickable" onclick="openProvaModal()">
+      <div class="val">${withReturn}</div>
+      <div class="lbl">Voltaram ao Tricot após Prova</div>
+    </div>
+    <div class="metric green">
+      <div class="val">${pct}%</div>
+      <div class="lbl">% de retorno (sobre as que passaram por Prova)</div>
+    </div>
+  `;
+
+  const returnOnly  = analyzed.filter(a => a.tricotBack.length > 0);
+
+  document.getElementById('refList').innerHTML =
+    `<div class="ref-header">
+      <span>Referência</span><span>Fase atual</span><span style="text-align:center">Qtd de Prova</span>
+    </div>` +
+    returnOnly.map(a =>
+      `<div class="ref-row">
+        <span class="ref-code">${esc(a.ref.code)}</span>
+        <span class="prova-badge">${esc(a.currentStage || '—')}</span>
+        <span class="qty-badge">${a.provaCount}</span>
+      </div>`
+    ).join('');
+
+  const returnSet = new Set(returnOnly.map(a => a.ref.code));
+  const provaSet  = new Set(analyzed.filter(a => a.hadProva).map(a => a.ref.code));
+
+  document.getElementById('tbodyAll').innerHTML = refs.map(ref => {
+    const inProva  = provaSet.has(ref.code);
+    const inReturn = returnSet.has(ref.code);
+    return `<tr>
+      <td><span class="ref-code">${esc(ref.code)}</span></td>
+      <td>${inProva  ? '<span class="badge-prova">Sim</span>'  : '<span style="color:#aaa">Não</span>'}</td>
+      <td>${inReturn ? '<span class="badge-tricot">Sim</span>' : '<span style="color:#aaa">Não</span>'}</td>
+      <td>${ref.stages.filter(s=>s.name).length}</td>
+    </tr>`;
+  }).join('');
+
+  // Relatório de Andamento da Coleção
+  const stageMap = {};
+  for (const a of analyzed) {
+    const stages = a.currentStages || [a.currentStage || '(sem etapa)'];
+    for (const s of stages) {
+      if (s) stageMap[s] = (stageMap[s] || 0) + 1;
+    }
+  }
+  document.getElementById('tbodyAndamento').innerHTML = Object.entries(stageMap)
+    .sort((a, b) => b[1] - a[1])
+    .map(([stage, count]) => `<tr>
+      <td>${esc(stage)}</td>
+      <td style="text-align:center;font-weight:600;">${count}</td>
+    </tr>`).join('');
+
+  hideProgress();
+  document.getElementById('results').style.display = 'block';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Export CSV
+// ─────────────────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const returnSet = new Set(gProvaRefs.filter(a => a.tricotBack.length > 0).map(a => a.ref.code));
+  const provaSet  = new Set(gProvaRefs.filter(a => a.hadProva).map(a => a.ref.code));
+  const aMap      = Object.fromEntries(gProvaRefs.map(a => [a.ref.code, a]));
+
+  const rows = [
+    ['Referência', 'Passou por Prova', 'Voltou ao Tricot após Prova',
+     'Etapa de Prova', 'Etapas Tricot após Prova', 'Qtd. Sub-etapas']
+  ];
+
+  for (const ref of gRefs) {
+    const a = aMap[ref.code] || {};
+    rows.push([
+      ref.code,
+      provaSet.has(ref.code)  ? 'SIM' : 'NÃO',
+      returnSet.has(ref.code) ? 'SIM' : 'NÃO',
+      a.provaName  || '',
+      (a.tricotBack || []).join('; '),
+      ref.stages.filter(s => s.name).length,
+    ]);
+  }
+
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'analise_tricot.csv'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function inRange(x, [min, max]) { return x >= min && x <= max; }
+
+function parseDate(str) {
+  const [d, m, y, h, mi, s] =
+    str.replace(' ', '/').replace(/:/g, '/').split('/').map(Number);
+  return new Date(y, m - 1, d, h, mi, s);
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showProgress(msg) {
+  document.getElementById('progText').textContent = msg;
+  document.getElementById('progress').style.display = 'block';
+}
+function hideProgress() { document.getElementById('progress').style.display = 'none'; }
+function hideResults()  { document.getElementById('results').style.display  = 'none'; }
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideError() { document.getElementById('errorBox').style.display = 'none'; }
+
+function openProvaModal() {
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeProvaModal(e) {
+  if (!e || e.target === document.getElementById('modalOverlay') || e.currentTarget.id === 'modalClose') {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  File input events
+// ─────────────────────────────────────────────────────────────────────────────
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.toLowerCase().endsWith('.pdf')) processPDF(f);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) processPDF(e.target.files[0]);
+  fileInput.value = '';
+});
+</script>
+
+<div id="modalOverlay" onclick="closeProvaModal(event)">
+  <div id="modalBox">
+    <button id="modalClose" onclick="closeProvaModal()">×</button>
+    <div id="modalTitle">Referências que voltaram ao Tricot após Prova de Peça</div>
+    <div id="refList"></div>
+  </div>
+</div>
+
+</body>
+</html>
