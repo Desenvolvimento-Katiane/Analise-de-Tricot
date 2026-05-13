@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Análise Tricot — Retorno após Prova</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -22,6 +23,7 @@
     }
     header h1 { font-size: 1.35em; font-weight: 600; }
     header p  { font-size: 0.82em; opacity: 0.75; margin-top: 4px; }
+    #collectionName { font-size: 1em; opacity: 1; font-weight: 500; margin-top: 6px; }
 
     main { max-width: 1200px; margin: 28px auto; padding: 0 20px; }
 
@@ -123,6 +125,28 @@
       margin-bottom: 18px; padding-right: 32px;
     }
     #refList { display: flex; flex-direction: column; gap: 6px; min-width: 380px; }
+    #stageModalOverlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    #stageModalOverlay.open { display: flex; }
+    #stageModalBox {
+      background: white; border-radius: 14px;
+      padding: 24px; max-width: 520px; width: 90vw; max-height: 85vh;
+      overflow-y: auto; position: relative;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+    #stageModalClose {
+      position: absolute; top: 12px; right: 16px;
+      background: none; border: none; font-size: 1.6em;
+      cursor: pointer; color: #666; line-height: 1;
+    }
+    #stageModalTitle {
+      font-size: 1em; font-weight: 700; color: #1a3a5c;
+      margin-bottom: 18px; padding-right: 32px;
+    }
+    #stageRefList { display: flex; flex-wrap: wrap; gap: 8px; }
     .ref-header {
       display: grid; grid-template-columns: 1fr 1fr 90px;
       padding: 4px 14px; font-size: 0.75em; font-weight: 700;
@@ -203,6 +227,59 @@
     .btn:hover { background: #2a5a8c; }
 
     #results { display: none; }
+
+    #reportLoadingOverlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.55); z-index:9999;
+      align-items:center; justify-content:center; flex-direction:column; gap:14px;
+    }
+    #reportLoadingOverlay.open { display:flex; }
+    #reportLoadingOverlay .rep-msg { color:#fff; font-size:0.95em; font-weight:600; }
+    #reportPage { position:fixed; left:-9999px; top:0; width:794px; background:#fff; }
+
+    @media print {
+      @page { size: A4 portrait; margin: 14mm 16mm; }
+
+      #dropZone, #progress, #errorBox,
+      #reportBtnRow, #reportLoadingOverlay, #reportPage,
+      #modalOverlay, #stageModalOverlay { display: none !important; }
+
+      #results { display: block !important; }
+
+      body { background: #fff !important; }
+      main { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+
+      header {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+        padding: 14px 20px;
+      }
+
+      .metrics {
+        display: flex !important; flex-wrap: wrap;
+        gap: 8px !important; margin-bottom: 14px !important;
+      }
+      .metric {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact; color-adjust: exact;
+        box-shadow: none !important; border: 1px solid #e0e0e0 !important;
+        padding: 10px 12px !important; min-width: 100px; page-break-inside: avoid;
+      }
+      .metric .val { font-size: 1.8em !important; }
+      .metric .lbl { font-size: 0.75em !important; }
+
+      .section {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact; color-adjust: exact;
+        box-shadow: none !important; border: 1px solid #e0e0e0 !important;
+        margin-bottom: 14px !important; page-break-inside: avoid;
+      }
+      table { border-collapse: collapse !important; width: 100% !important; }
+      th { font-size: 0.7em !important; padding: 6px 10px !important; }
+      td { font-size: 0.82em !important; padding: 6px 10px !important; }
+      tr { page-break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
@@ -242,19 +319,28 @@
 
     <div class="metrics" id="metrics"></div>
 
-    <!-- Collection progress report -->
-    <div class="section" id="sectionAndamento">
+    <div id="reportBtnRow" style="display:flex;justify-content:flex-end;gap:10px;margin:0 0 18px 0;">
+      <button onclick="window.print()" style="background:#546e7a;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:0.9em;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 2px 6px rgba(0,0,0,0.15);">
+        &#128438; Imprimir A4
+      </button>
+      <button onclick="generateReport()" style="background:#1a3a5c;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:0.9em;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 2px 6px rgba(0,0,0,0.15);">
+        &#128196; Gerar Relatório A4
+      </button>
+    </div>
+
+    <!-- Sub-etapas atuais -->
+    <div class="section" id="sectionFases">
       <div class="sec-header">
-        <h3>Relatório de Andamento da Coleção</h3>
+        <h3>Sub-etapas Atuais</h3>
       </div>
       <table>
         <thead>
           <tr>
-            <th>Sub-etapa Atual</th>
-            <th style="text-align:center">Referências</th>
+            <th>Sub-etapa</th>
+            <th style="text-align:center">Modelos</th>
           </tr>
         </thead>
-        <tbody id="tbodyAndamento"></tbody>
+        <tbody id="tbodyFases"></tbody>
       </table>
     </div>
 
@@ -315,6 +401,23 @@ const REF_RE   = /^[A-Z]{1,4}\d{3,5}(\s+V\d+)?(\s+TRICOT)?$/;
 
 // Dates in the report: DD/MM/YYYY HH:MM:SS
 const DATE_RE  = /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/;
+const ATUAL_RE = /^atual$/i;
+const ARTE_GROUP = new Set([
+  'Para Desenhar','Desenhista Carol V.','Desenhista Vanessa','Desenhista Rafaela',
+  'Desenhista Ede','Desenhista Iza','Desenhista Henrique','Desenhista Lis',
+  'Desenhista Karina','Desenhista Maicon','Desenhista Marcio','Desenhista Regina',
+  'Desenhista Assistente','Alteração Desenho','Fazer Briefing',
+  'Desenho Aguardando','Desenho - Ag. Ficha'
+]);
+const ENG_GROUP = new Set([
+  'Entrada Engenharia','Modelagem Liberação','Tricot Graduação',
+  'Encaixe','Seq. Operacional','Ficha Técnica'
+]);
+const PCP_GROUP = new Set([
+  'Análise de Custo','Pré Cadastro - Custo','Custo Calculado','Custo em Negociação',
+  'Foto Still','Still Ok','Analise PCP','Lib. Mostruário - PCP','Concluído'
+]);
+const IGNORE_STAGES = new Set(['pcp','eng','tricot graduação','tricot desenho ok','programa bordado','pendente custo','projeção']);
 
 // "Prova de Peça" — text that starts with "Prova"
 // Excludes "Alteração Prova" (which starts with "Alteração")
@@ -329,9 +432,10 @@ const ENGENHARIA_RE = /entrada\s+engenharia/i;
 // ─────────────────────────────────────────────────────────────────────────────
 //  State
 // ─────────────────────────────────────────────────────────────────────────────
-let gRefs      = [];  // all parsed references
-let gProvaRefs = [];  // analysis results
-let gCollection = ''; // collection name from PDF
+let gRefs        = [];  // all parsed references
+let gProvaRefs   = [];  // analysis results
+let gCollection  = ''; // collection name from PDF
+let gStageRefMap = {}; // refs per stage for modal
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Main entry point
@@ -363,15 +467,23 @@ async function processPDF(file) {
     gRefs      = buildReferences(items);
     gProvaRefs = analyzeReturnToTricot(gRefs);
 
-    // Extract collection name from leftmost column (x < COL_MODELO[0])
-    const colCounts = {};
-    for (const it of items) {
-      if (it.x < COL_MODELO[0] && it.y <= HEADER_Y_MAX && it.text.length > 2) {
-        colCounts[it.text] = (colCounts[it.text] || 0) + 1;
+    // Extract collection name by locating the "Coleção" column header
+    { const hdr = items.find(it => /colec[aã]o/i.test(it.text));
+      if (hdr) {
+        const cx = hdr.x, TOL = 40;
+        const vals = {};
+        for (const it of items) {
+          if (Math.abs(it.x - cx) <= TOL && it.y <= HEADER_Y_MAX && it.text.length > 1
+              && !/colec[aã]o/i.test(it.text)) {
+            vals[it.text] = (vals[it.text] || 0) + 1;
+          }
+        }
+        const top = Object.entries(vals).sort((a, b) => b[1] - a[1]);
+        gCollection = top.length > 0 ? top[0][0] : '';
+      } else {
+        gCollection = '';
       }
-    }
-    const colTop = Object.entries(colCounts).sort((a, b) => b[1] - a[1]);
-    gCollection = colTop.length > 0 ? colTop[0][0] : '';
+      console.log('[Coleção]', gCollection); }
 
     if (gRefs.length === 0) {
       showError(
@@ -420,7 +532,7 @@ function buildReferences(items) {
     i.y <= HEADER_Y_MAX && inRange(i.x, COL_SUBETAPA)
   );
   const dateItems = items.filter(i =>
-    i.y <= HEADER_Y_MAX && inRange(i.x, COL_DATA) && DATE_RE.test(i.text)
+    i.y <= HEADER_Y_MAX && inRange(i.x, COL_DATA) && (DATE_RE.test(i.text) || ATUAL_RE.test(i.text))
   );
 
   for (const item of subItems) {
@@ -590,20 +702,55 @@ function displayResults(refs, analyzed) {
     </tr>`;
   }).join('');
 
-  // Relatório de Andamento da Coleção
-  const stageMap = {};
-  for (const a of analyzed) {
-    const stages = a.currentStages || [a.currentStage || '(sem etapa)'];
-    for (const s of stages) {
-      if (s) stageMap[s] = (stageMap[s] || 0) + 1;
+
+  const stageMap = {}, stageRefMap = {};
+  const addRef = (g, code, trigger) => { (stageRefMap[g] = stageRefMap[g] || []).push({code, trigger}); };
+  for (const ref of refs) {
+    let hasArte = false, hasEng = false, hasPcp = false;
+    let arteStages = [], engStages = [], pcpStages = [];
+    for (const s of ref.stages) {
+      if (s.name && ATUAL_RE.test(s.dateStr)) {
+        if (IGNORE_STAGES.has(s.name.toLowerCase())) continue;
+        if      (ARTE_GROUP.has(s.name)) { hasArte = true; arteStages.push(s.name); }
+        else if (ENG_GROUP.has(s.name))  { hasEng  = true; engStages.push(s.name); }
+        else if (PCP_GROUP.has(s.name))  { hasPcp  = true; pcpStages.push(s.name); }
+        else { stageMap[s.name] = (stageMap[s.name] || 0) + 1; addRef(s.name, ref.code, s.name); }
+      }
     }
+    if (hasArte) { stageMap['Desenhando Arte']      = (stageMap['Desenhando Arte']      || 0) + 1; addRef('Desenhando Arte', ref.code, arteStages.join(', ')); }
+    if (hasEng)  { stageMap['Liberação Engenharia'] = (stageMap['Liberação Engenharia'] || 0) + 1; addRef('Liberação Engenharia', ref.code, engStages.join(', ')); }
+    if (hasPcp)  { stageMap['Liberação PCP']        = (stageMap['Liberação PCP']        || 0) + 1; addRef('Liberação PCP', ref.code, pcpStages.join(', ')); }
   }
-  document.getElementById('tbodyAndamento').innerHTML = Object.entries(stageMap)
-    .sort((a, b) => b[1] - a[1])
-    .map(([stage, count]) => `<tr>
-      <td>${esc(stage)}</td>
-      <td style="text-align:center;font-weight:600;">${count}</td>
-    </tr>`).join('');
+  gStageRefMap = stageRefMap;
+  { const fsSorted = Object.entries(stageMap).sort((a, b) => {
+      const aLib = a[0]==='Liberação PCP'||a[0]==='Liberação Engenharia';
+      const bLib = b[0]==='Liberação PCP'||b[0]==='Liberação Engenharia';
+      if (aLib && bLib) return a[0]==='Liberação Engenharia' ? -1 : 1;
+      if (aLib && !bLib) return  1;
+      if (!aLib && bLib) return -1;
+      const at = /tricot/i.test(a[0]), bt = /tricot/i.test(b[0]);
+      if (at && !bt) return -1;
+      if (!at && bt) return  1;
+      return b[1] - a[1];
+    });
+    let fsSum = 0, fsEnd = -1;
+    const fsRows = fsSorted.map(([stage, count], i) => {
+      const isTricot = /tricot/i.test(stage);
+      const isLib    = stage==='Liberação PCP'||stage==='Liberação Engenharia';
+      if (isTricot) { fsSum += count; fsEnd = i; }
+      const bg    = isLib ? 'background:#e8f5e9;' : isTricot ? 'background:#fff3e0;' : '';
+      const color = isLib ? 'color:#2e7d32;font-weight:700;' : isTricot ? 'color:#e67e22;font-weight:700;' : '';
+      return `<tr data-stage="${esc(stage)}" onclick="openStageModal(this)" style="cursor:pointer;${bg}">
+        <td style="${color}">${esc(stage)}</td>
+        <td style="text-align:center;font-weight:600;${color}">${count}</td>
+      </tr>`;
+    });
+    if (fsEnd >= 0) fsRows.splice(fsEnd + 1, 0,
+      `<tr style="background:#ffe0b2;border-top:2px solid #e67e22;border-bottom:2px solid #e67e22;">
+        <td style="color:#bf360c;font-weight:700;padding:9px 14px 9px 22px;">Total Tricot</td>
+        <td style="text-align:center;font-weight:700;color:#bf360c;padding:9px 14px;">${fsSum}</td>
+      </tr>`);
+    document.getElementById('tbodyFases').innerHTML = fsRows.join(''); }
 
   hideProgress();
   document.getElementById('results').style.display = 'block';
@@ -681,6 +828,134 @@ function closeProvaModal(e) {
   }
 }
 
+function openStageModal(row) {
+  const stage   = row.getAttribute('data-stage');
+  const entries = (gStageRefMap[stage] || []).slice().sort((a, b) => a.code.localeCompare(b.code));
+  document.getElementById('stageModalTitle').textContent = stage + ' — ' + entries.length + ' referência(s)';
+  document.getElementById('stageRefList').innerHTML = entries
+    .map(({code, trigger}) => `<div style="display:flex;align-items:center;gap:8px;background:#f0f4ff;padding:6px 14px;border-radius:8px;">
+      <span style="color:#1a3a5c;font-weight:700;font-size:0.92em;">${esc(code)}</span>
+      <span style="color:#888;font-size:0.82em;">→ ${esc(trigger)}</span>
+    </div>`)
+    .join('');
+  document.getElementById('stageModalOverlay').classList.add('open');
+}
+function closeStageModal(e) {
+  if (!e || e.target === document.getElementById('stageModalOverlay') || e.currentTarget.id === 'stageModalClose') {
+    document.getElementById('stageModalOverlay').classList.remove('open');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Generate A4 report image
+// ─────────────────────────────────────────────────────────────────────────────
+function generateReport() {
+  if (!gRefs.length) return;
+
+  const now      = new Date();
+  const dateStr  = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  const dateFile = now.toLocaleDateString('pt-BR').replace(/\//g, '-');
+
+  const total          = gRefs.length;
+  const withProva      = gProvaRefs.filter(a => a.hadProva).length;
+  const withReturn     = gProvaRefs.filter(a => a.tricotBack.length > 0).length;
+  const pct            = withProva > 0 ? Math.round(withReturn / withProva * 100) : 0;
+  const withEngenharia = gProvaRefs.filter(a => a.passedEngenharia).length;
+
+  const stageMap = Object.fromEntries(Object.entries(gStageRefMap).map(([k, v]) => [k, v.length]));
+  const sortedStages = Object.entries(stageMap).sort((a, b) => {
+    const aLib = a[0]==='Liberação PCP'||a[0]==='Liberação Engenharia';
+    const bLib = b[0]==='Liberação PCP'||b[0]==='Liberação Engenharia';
+    if (aLib && !bLib) return  1;
+    if (!aLib && bLib) return -1;
+    const at = /tricot/i.test(a[0]), bt = /tricot/i.test(b[0]);
+    if (at && !bt) return -1;
+    if (!at && bt) return  1;
+    return b[1] - a[1];
+  });
+
+  let rSum = 0, rEnd = -1;
+  const rRows = sortedStages.map(([stage, count], i) => {
+    const isTricot = /tricot/i.test(stage);
+    const isLib    = stage==='Liberação PCP'||stage==='Liberação Engenharia';
+    if (isTricot) { rSum += count; rEnd = i; }
+    const bg    = isLib ? '#e8f5e9' : isTricot ? '#fff3e0' : (i%2===0 ? '#ffffff' : '#f8f9fa');
+    const color = isLib ? '#2e7d32' : isTricot ? '#e67e22' : '#333';
+    const fw    = (isLib || isTricot) ? '700' : '400';
+    return `<tr style="background:${bg};"><td style="padding:6px 12px;font-size:0.82em;border-bottom:1px solid #f0f0f0;color:${color};font-weight:${fw};">${esc(stage)}</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;border-bottom:1px solid #f0f0f0;font-weight:600;color:${color};">${count}</td></tr>`;
+  });
+  if (rEnd >= 0) rRows.splice(rEnd + 1, 0,
+    `<tr style="background:#ffe0b2;border-top:2px solid #e67e22;border-bottom:2px solid #e67e22;"><td style="padding:6px 12px 6px 20px;font-size:0.82em;color:#bf360c;font-weight:700;">Total Tricot</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;font-weight:700;color:#bf360c;">${rSum}</td></tr>`);
+  const fasesRows = rRows.join('');
+
+  const kpiCards = [
+    { val: total,          lbl: 'Mix',                           color: '#1a3a5c' },
+    { val: withEngenharia, lbl: 'Peças Liberadas',               color: '#0097a7' },
+    { val: withProva,      lbl: 'Passaram por Prova',            color: '#8e44ad' },
+    { val: withReturn,     lbl: 'Voltaram ao Tricot após Prova', color: '#e67e22' },
+    { val: pct + '%',      lbl: '% de Retorno',                  color: '#27ae60' },
+  ];
+  const kpiHtml = kpiCards.map(k =>
+    `<div style="flex:1;background:#ffffff;border-radius:8px;padding:14px 12px;border-top:4px solid ${k.color};box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+      <div style="font-size:1.7em;font-weight:700;color:${k.color};line-height:1.1;">${k.val}</div>
+      <div style="font-size:0.72em;color:#666;margin-top:5px;line-height:1.3;">${k.lbl}</div>
+    </div>`
+  ).join('');
+
+  const thStyle  = 'background:#f5f7fa;padding:7px 12px;text-align:left;font-size:0.7em;text-transform:uppercase;letter-spacing:0.4px;color:#555;border-bottom:2px solid #e0e4ea;';
+  const secTitle = 'font-size:0.75em;font-weight:700;color:#1a3a5c;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e0e4ea;';
+
+  const html = `
+    <div style="background:#1a3a5c;padding:26px 32px 22px;display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <div style="color:#ffffff;font-size:1.5em;font-weight:700;letter-spacing:0.3px;">Análise de Tricot</div>
+        <div style="color:#ffffff;font-size:1em;font-weight:600;margin-top:6px;">${esc(gCollection||'')}</div>
+        <div style="color:rgba(255,255,255,0.65);font-size:0.78em;margin-top:5px;">Dashboard Executivo de Coleção</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="color:rgba(255,255,255,0.65);font-size:0.75em;">${dateStr}</div>
+      </div>
+    </div>
+    <div style="padding:18px 28px;background:#f0f2f5;display:flex;gap:10px;">${kpiHtml}</div>
+    <div style="height:3px;background:#e0e4ea;"></div>
+    <div style="padding:16px 28px 8px;">
+      <div style="${secTitle}">Sub-etapas Atuais</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+          <th style="${thStyle}">Sub-etapa</th>
+          <th style="${thStyle}text-align:center;">Modelos</th>
+        </tr></thead>
+        <tbody>${fasesRows}</tbody>
+      </table>
+    </div>
+    <div style="background:#1a3a5c;padding:10px 28px;display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
+      <div style="color:rgba(255,255,255,0.65);font-size:0.7em;">Gerado em ${dateStr}</div>
+      <div style="color:rgba(255,255,255,0.65);font-size:0.7em;">Análise Tricot</div>
+    </div>`;
+
+  const page = document.getElementById('reportPage');
+  page.innerHTML = html;
+
+  const overlay = document.getElementById('reportLoadingOverlay');
+  overlay.classList.add('open');
+
+  setTimeout(() => {
+    html2canvas(page, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false })
+      .then(canvas => {
+        overlay.classList.remove('open');
+        const link = document.createElement('a');
+        const safeCol = (gCollection || 'Tricot').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        link.download = `Relatorio_Tricot_${safeCol}_${dateFile}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      })
+      .catch(() => {
+        overlay.classList.remove('open');
+        alert('Erro ao gerar relatório. Tente novamente.');
+      });
+  }, 100);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  File input events
 // ─────────────────────────────────────────────────────────────────────────────
@@ -704,6 +979,14 @@ fileInput.addEventListener('change', e => {
 });
 </script>
 
+<div id="stageModalOverlay" onclick="closeStageModal(event)">
+  <div id="stageModalBox">
+    <button id="stageModalClose" onclick="closeStageModal()">×</button>
+    <div id="stageModalTitle"></div>
+    <div id="stageRefList"></div>
+  </div>
+</div>
+
 <div id="modalOverlay" onclick="closeProvaModal(event)">
   <div id="modalBox">
     <button id="modalClose" onclick="closeProvaModal()">×</button>
@@ -711,6 +994,12 @@ fileInput.addEventListener('change', e => {
     <div id="refList"></div>
   </div>
 </div>
+
+<div id="reportLoadingOverlay">
+  <div class="spinner"></div>
+  <div class="rep-msg">Gerando relatório…</div>
+</div>
+<div id="reportPage"></div>
 
 </body>
 </html>
