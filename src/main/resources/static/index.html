@@ -544,19 +544,30 @@ function buildReferences(items) {
     if (idx !== -1) refs[idx].dateItems.push(item);
   }
 
-  // 3. Sort items top→bottom within each reference and pair them
+  // 3. Sort items top→bottom and pair stage↔date by nearest y on the same page.
+  // Index-based pairing breaks when a stage has no date entry in the PDF,
+  // shifting "atual" onto the wrong stage. Y-proximity is more robust.
+  const Y_PAIR_TOL = 8;
   for (const ref of refs) {
     ref.stageItems.sort((a, b) => a.page !== b.page ? a.page - b.page : b.y - a.y);
     ref.dateItems .sort((a, b) => a.page !== b.page ? a.page - b.page : b.y - a.y);
 
-    const n = Math.max(ref.stageItems.length, ref.dateItems.length);
-    for (let i = 0; i < n; i++) {
-      const sItem = ref.stageItems[i];
-      const dItem = ref.dateItems[i];
+    const usedDate = new Set();
+    for (const sItem of ref.stageItems) {
+      let best = -1, bestDist = Infinity;
+      for (let j = 0; j < ref.dateItems.length; j++) {
+        if (usedDate.has(j)) continue;
+        const dItem = ref.dateItems[j];
+        if (dItem.page !== sItem.page) continue;
+        const dist = Math.abs(dItem.y - sItem.y);
+        if (dist < bestDist) { bestDist = dist; best = j; }
+      }
+      const dItem = best !== -1 && bestDist <= Y_PAIR_TOL ? ref.dateItems[best] : null;
+      if (dItem) usedDate.add(best);
       ref.stages.push({
-        name:    sItem ? sItem.text : '',
+        name:    sItem.text,
         dateStr: dItem ? dItem.text : '',
-        date:    dItem ? parseDate(dItem.text) : null,
+        date:    dItem && !ATUAL_RE.test(dItem.text) ? parseDate(dItem.text) : null,
       });
     }
   }
