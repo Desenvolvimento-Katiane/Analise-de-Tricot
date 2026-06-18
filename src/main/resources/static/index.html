@@ -756,10 +756,13 @@ function displayResults(refs, analyzed) {
       }
       const bg    = isLib ? 'background:#e8f5e9;' : isTricot ? 'background:#fff3e0;' : '';
       const color = isLib ? 'color:#2e7d32;font-weight:700;' : isTricot ? 'color:#e67e22;font-weight:700;' : '';
-      const pc = (stageRefMap[stage] || []).filter(r => provaSet.has(r.code)).length;
-      const provaCell = pc > 0
-        ? `<span style="background:#e8f5e9;color:#27ae60;padding:2px 9px;border-radius:10px;font-size:0.82em;font-weight:700;">${pc}</span>`
-        : `<span style="color:#ccc;font-size:0.82em;">—</span>`;
+      let provaCell = '';
+      if (isTricot) {
+        const pc = (stageRefMap[stage] || []).filter(r => provaSet.has(r.code)).length;
+        provaCell = pc > 0
+          ? `<span style="background:#e8f5e9;color:#27ae60;padding:2px 9px;border-radius:10px;font-size:0.82em;font-weight:700;">${pc}</span>`
+          : `<span style="color:#ccc;font-size:0.82em;">—</span>`;
+      }
       return `<tr data-stage="${esc(stage)}" onclick="openStageModal(this)" style="cursor:pointer;${bg}">
         <td style="${color}">${esc(stage)}</td>
         <td style="text-align:center;font-weight:600;${color}">${count}</td>
@@ -909,10 +912,13 @@ function generateReport() {
     const bg    = isLib ? '#e8f5e9' : isTricot ? '#fff3e0' : (i%2===0 ? '#ffffff' : '#f8f9fa');
     const color = isLib ? '#2e7d32' : isTricot ? '#e67e22' : '#333';
     const fw    = (isLib || isTricot) ? '700' : '400';
-    const rpc = (gStageRefMap[stage] || []).filter(r => rProvaSet.has(r.code)).length;
-    const provaCell = rpc > 0
-      ? `<span style="background:#e8f5e9;color:#27ae60;padding:2px 7px;border-radius:8px;font-size:0.78em;font-weight:700;">${rpc}</span>`
-      : `<span style="color:#ccc;font-size:0.78em;">—</span>`;
+    let provaCell = '';
+    if (isTricot) {
+      const rpc = (gStageRefMap[stage] || []).filter(r => rProvaSet.has(r.code)).length;
+      provaCell = rpc > 0
+        ? `<span style="background:#e8f5e9;color:#27ae60;padding:2px 7px;border-radius:8px;font-size:0.78em;font-weight:700;">${rpc}</span>`
+        : `<span style="color:#ccc;font-size:0.78em;">—</span>`;
+    }
     return `<tr style="background:${bg};"><td style="padding:6px 12px;font-size:0.82em;border-bottom:1px solid #f0f0f0;color:${color};font-weight:${fw};">${esc(stage)}</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;border-bottom:1px solid #f0f0f0;font-weight:600;color:${color};">${count}</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;border-bottom:1px solid #f0f0f0;">${provaCell}</td></tr>`;
   });
   if (rEnd >= 0) rRows.splice(rEnd + 1, 0,
