@@ -338,6 +338,7 @@
           <tr>
             <th>Sub-etapa</th>
             <th style="text-align:center">Modelos</th>
+            <th style="text-align:center">c/ Prova</th>
           </tr>
         </thead>
         <tbody id="tbodyFases"></tbody>
@@ -745,21 +746,34 @@ function displayResults(refs, analyzed) {
       return b[1] - a[1];
     });
     let fsSum = 0, fsEnd = -1;
+    const fsProvaSet = new Set();
     const fsRows = fsSorted.map(([stage, count], i) => {
       const isTricot = /tricot/i.test(stage);
       const isLib    = stage==='Liberação PCP'||stage==='Liberação Engenharia';
-      if (isTricot) { fsSum += count; fsEnd = i; }
+      if (isTricot) {
+        fsSum += count; fsEnd = i;
+        (stageRefMap[stage] || []).forEach(r => { if (provaSet.has(r.code)) fsProvaSet.add(r.code); });
+      }
       const bg    = isLib ? 'background:#e8f5e9;' : isTricot ? 'background:#fff3e0;' : '';
       const color = isLib ? 'color:#2e7d32;font-weight:700;' : isTricot ? 'color:#e67e22;font-weight:700;' : '';
+      let provaCell = '';
+      if (isTricot) {
+        const pc = (stageRefMap[stage] || []).filter(r => provaSet.has(r.code)).length;
+        provaCell = pc > 0
+          ? `<span style="background:#e8f5e9;color:#27ae60;padding:2px 9px;border-radius:10px;font-size:0.82em;font-weight:700;">${pc}</span>`
+          : `<span style="color:#ccc;font-size:0.82em;">—</span>`;
+      }
       return `<tr data-stage="${esc(stage)}" onclick="openStageModal(this)" style="cursor:pointer;${bg}">
         <td style="${color}">${esc(stage)}</td>
         <td style="text-align:center;font-weight:600;${color}">${count}</td>
+        <td style="text-align:center;">${provaCell}</td>
       </tr>`;
     });
     if (fsEnd >= 0) fsRows.splice(fsEnd + 1, 0,
       `<tr style="background:#ffe0b2;border-top:2px solid #e67e22;border-bottom:2px solid #e67e22;">
         <td style="color:#bf360c;font-weight:700;padding:9px 14px 9px 22px;">Total Tricot</td>
         <td style="text-align:center;font-weight:700;color:#bf360c;padding:9px 14px;">${fsSum}</td>
+        <td style="text-align:center;"><span style="background:#e8f5e9;color:#27ae60;padding:2px 9px;border-radius:10px;font-size:0.82em;font-weight:700;">${fsProvaSet.size}</span></td>
       </tr>`);
     document.getElementById('tbodyFases').innerHTML = fsRows.join(''); }
 
@@ -885,18 +899,30 @@ function generateReport() {
     return b[1] - a[1];
   });
 
+  const rProvaSet = new Set(gProvaRefs.filter(a => a.hadProva).map(a => a.ref.code));
   let rSum = 0, rEnd = -1;
+  const rProvaTotal = new Set();
   const rRows = sortedStages.map(([stage, count], i) => {
     const isTricot = /tricot/i.test(stage);
     const isLib    = stage==='Liberação PCP'||stage==='Liberação Engenharia';
-    if (isTricot) { rSum += count; rEnd = i; }
+    if (isTricot) {
+      rSum += count; rEnd = i;
+      (gStageRefMap[stage] || []).forEach(r => { if (rProvaSet.has(r.code)) rProvaTotal.add(r.code); });
+    }
     const bg    = isLib ? '#e8f5e9' : isTricot ? '#fff3e0' : (i%2===0 ? '#ffffff' : '#f8f9fa');
     const color = isLib ? '#2e7d32' : isTricot ? '#e67e22' : '#333';
     const fw    = (isLib || isTricot) ? '700' : '400';
-    return `<tr style="background:${bg};"><td style="padding:6px 12px;font-size:0.82em;border-bottom:1px solid #f0f0f0;color:${color};font-weight:${fw};">${esc(stage)}</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;border-bottom:1px solid #f0f0f0;font-weight:600;color:${color};">${count}</td></tr>`;
+    let provaCell = '';
+    if (isTricot) {
+      const pc = (gStageRefMap[stage] || []).filter(r => rProvaSet.has(r.code)).length;
+      provaCell = pc > 0
+        ? `<span style="background:#e8f5e9;color:#27ae60;padding:2px 7px;border-radius:8px;font-size:0.78em;font-weight:700;">${pc}</span>`
+        : `<span style="color:#ccc;font-size:0.78em;">—</span>`;
+    }
+    return `<tr style="background:${bg};"><td style="padding:6px 12px;font-size:0.82em;border-bottom:1px solid #f0f0f0;color:${color};font-weight:${fw};">${esc(stage)}</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;border-bottom:1px solid #f0f0f0;font-weight:600;color:${color};">${count}</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;border-bottom:1px solid #f0f0f0;">${provaCell}</td></tr>`;
   });
   if (rEnd >= 0) rRows.splice(rEnd + 1, 0,
-    `<tr style="background:#ffe0b2;border-top:2px solid #e67e22;border-bottom:2px solid #e67e22;"><td style="padding:6px 12px 6px 20px;font-size:0.82em;color:#bf360c;font-weight:700;">Total Tricot</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;font-weight:700;color:#bf360c;">${rSum}</td></tr>`);
+    `<tr style="background:#ffe0b2;border-top:2px solid #e67e22;border-bottom:2px solid #e67e22;"><td style="padding:6px 12px 6px 20px;font-size:0.82em;color:#bf360c;font-weight:700;">Total Tricot</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;font-weight:700;color:#bf360c;">${rSum}</td><td style="padding:6px 12px;text-align:center;font-size:0.82em;"><span style="background:#e8f5e9;color:#27ae60;padding:2px 7px;border-radius:8px;font-weight:700;">${rProvaTotal.size}</span></td></tr>`);
   const fasesRows = rRows.join('');
 
   const kpiCards = [
@@ -935,6 +961,7 @@ function generateReport() {
         <thead><tr>
           <th style="${thStyle}">Sub-etapa</th>
           <th style="${thStyle}text-align:center;">Modelos</th>
+          <th style="${thStyle}text-align:center;">c/ Prova</th>
         </tr></thead>
         <tbody>${fasesRows}</tbody>
       </table>
